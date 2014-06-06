@@ -5,9 +5,10 @@ import socket
 import sys
 import termios
 import contextlib
-import time
 import pickle
 from termcolor import colored
+from sys import stdout
+from time import sleep
 
 LEFT = 1
 RIGHT = 2
@@ -17,9 +18,10 @@ BLANK = '.'
 mainShutdown = False
 client_sock = None
 server_sock = None
-PORT_NUMBER_1 = 10074
-PORT_NUMBER_2 = 10075
+PORT_NUMBER_1 = 10076
+PORT_NUMBER_2 = 10077
 connection = 0
+move = None
 WAIT = None
 serverExit = False
 # board = [['.',2,4,2],
@@ -230,10 +232,11 @@ def getAdjacentTiles(i,j):
 	return tiles
 
 def sendState(pkt_type):
-	# print "SENDING NEW_TILES"
+	print "SENDING NEW_TILES"
 	client_sock.sendall("NEW_TILES")
 	client_sock.sendall(pickle.dumps(newTiles))
-	time.sleep(1)
+	print newTiles
+	sleep(1)
 	# print "SENDING %s"%pkt_type
 	client_sock.sendall(pkt_type)
 	client_sock.sendall(pickle.dumps(board))
@@ -248,7 +251,7 @@ def clientStart():
 		server_address = (sys.argv[2], PORT_NUMBER_1)
 	else:
 		server_address = (sys.argv[2], PORT_NUMBER_2)
-	print >>sys.stderr, 'connecting to %s port %s' % server_address
+	print >>sys.stderr, 'connecting to %s port %s\n' % server_address
 	try:
 		client_sock.connect(server_address)
 	except:
@@ -294,10 +297,10 @@ def server():
 	server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 	# Bind the socket to the port
 	if int(sys.argv[1]) == 1:
-		server_address = ('localhost', PORT_NUMBER_2)
+		server_address = (sys.argv[2], PORT_NUMBER_2)
 	else:
-		server_address = ('localhost', PORT_NUMBER_1)
-	print >>sys.stderr, 'starting up on %s port %s' % server_address
+		server_address = (sys.argv[2], PORT_NUMBER_1)
+	print >>sys.stderr, 'starting up on %s port %s\n' % server_address
 	server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 	server_sock.bind(server_address)
 	# Listen for incoming connections
@@ -316,24 +319,21 @@ def server():
 			if data:
 				if data == "BOARD" or data == "INITIAL" or data == "NEW_TILES":
 					state = data
-					# print "STATE: %s"%state
-				# elif data == "FIN":
-					# break
 				else:
 					if state == "BOARD":
 						board = pickle.loads(data)
 						print colored("The other player has made a move",'red')
 						printBoard()
-						# print "received board"
+						print "received board"
 						WAIT = False
 					elif state == "INITIAL":
 						board = pickle.loads(data)
-						# print "received initial"
+						print "received initial"
 						printBoard()
 					elif state == "NEW_TILES":
 						newTiles = pickle.loads(data)
-						# print newTiles
-						# print "received new tiles"
+						print "received new tiles"
+						print newTiles
 					state = "NORMAL"
 					# print "STATE: NORMAL"
 			else:
@@ -368,8 +368,9 @@ def run():
 	serverThread.daemon = True
 	serverThread.start()
 	try:
-		time.sleep(5)
+		sleep(5)
 	except:
+		print "time exception"
 		pass
 	clientStart()
 
@@ -381,79 +382,88 @@ def run():
 		WAIT = False
 	else:
 		WAIT = True
-	thread.start_new_thread(logic,tuple())
+	logicThread = threading.Thread(target=logic,args=tuple())
+	logicThread.daemon = True
+	logicThread.start()
 	try:
 		while 1:
-			time.sleep(0.1) 
+			sleep(0.1) 
 	except KeyboardInterrupt:
-		pass
+		print "main interrupt"
 	finally:
 		mainShutdown = True
 		print "main finally"
 		closeEverything(serverThread)
-	print "exit main"
+	if logicThread.isAlive():
+		print "PRESS ANY BUTTON TO TERMINATE"
+		logicThread.join()
+	# print "exit main"
+	# sys.stdout.flush()
+	# sys.stdin.flush()
 
 def logic():
+	global move
 	global WAIT
 	madeMove = False
-	with raw_mode(sys.stdin):
-		# try:
-		while not isOver() and not serverExit:
-			while(1):
-				if WAIT == True:
-					print colored("Waiting for other player to make move...",'red')
-					while(WAIT == True):
-						if serverExit:
-							break
-					print "wait now false"
-					break
-				else:
-					madeMove = True
-					sys.stdout.write(colored("Make a move: ",'red'))
-					move = sys.stdin.read(1)
-					print move
-					if move == 'i' or move == 'I' or move == 'w' or move == 'W':
-						isValidMove = makeMove(UP)
-						break
-					elif move == 'j' or move == 'J' or move == 'a' or move == 'A':
-						isValidMove = makeMove(LEFT)
-						break
-					elif move == 'k' or move == 'K' or move == 's' or move == 'S':
-						isValidMove = makeMove(DOWN)
-						break
-					elif move == 'l' or move == 'L' or move == 'd' or move == 'D':
-						isValidMove = makeMove(RIGHT)
+	try:
+		with raw_mode(sys.stdin):
+			while not isOver() and not serverExit:
+				while(1):
+					if WAIT == True:
+						print colored("Waiting for other player to make move...",'red')
+						while(WAIT == True):
+							if serverExit:
+								break
+						print "wait now false"
 						break
 					else:
-						print colored("Bad input",'red')
-			if isOver():
-				break
-			if WAIT == False and madeMove:
-				madeMove = False
-				print "if wait is false"
-				if not isValidMove:
-					print colored("Moving in that direction doesn't move anything",'red')
-				elif containsBlanks():
-					generateNewTile()
-					sendState("BOARD")
-					WAIT = True
+						sys.stdout.write(colored("Make a move: \n",'red'))
+						move = sys.stdin.read(1)
+						if mainShutdown:
+							thread.exit()
+						print move
+
+						if move == 'i' or move == 'I' or move == 'w' or move == 'W':
+							madeMove = True
+							isValidMove = makeMove(UP)
+							break
+						elif move == 'j' or move == 'J' or move == 'a' or move == 'A':
+							madeMove = True
+							isValidMove = makeMove(LEFT)
+							break
+						elif move == 'k' or move == 'K' or move == 's' or move == 'S':
+							madeMove = True
+							isValidMove = makeMove(DOWN)
+							break
+						elif move == 'l' or move == 'L' or move == 'd' or move == 'D':
+							madeMove = True
+							isValidMove = makeMove(RIGHT)
+							break
+						else:
+							print colored("Bad input",'red')
+						move = None
+				if isOver():
+					break
+				if WAIT == False and madeMove:
+					madeMove = False
+					print "if wait is false"
+					if not isValidMove:
+						print colored("Moving in that direction doesn't move anything",'red')
+					elif containsBlanks():
+						generateNewTile()
+						sendState("BOARD")
+						WAIT = True
+					printBoard()
+			if not serverExit:
 				printBoard()
-		if not serverExit:
-			printBoard()
-			if hasWon():
-				print colored("You both won!",'red')
-			else:
-				print colored("You both lost!",'red')
-		# except KeyboardInterrupt:
-		# 	pass
-			# closeEverything()
-			# print "main keyboard interrupt"
-			# closeEverything()
-		# finally:
-			# print "main finally"
-			# closeEverything()
-		# 	print "finally"
-		# 	closeClient()
+				if hasWon():
+					print colored("You both won!",'red')
+				else:
+					print colored("You both lost!",'red')
+	except KeyboardInterrupt:
+		"logic interrupt"
+
+	print "logic ended"
 
 @contextlib.contextmanager
 def raw_mode(file):
