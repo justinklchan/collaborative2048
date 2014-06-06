@@ -18,14 +18,15 @@ PORT_NUMBER_1 = 10028
 PORT_NUMBER_2 = 10029
 connection = 0
 WAIT = None
-board = [['.','.','.','.'],
-		 ['.','.','.','.'],
-		 ['.','.','.','.'],
-		 ['.','.','.','.']]
-# board = [[2,16,2,2],
-# 		 [4,64,4,32],
-# 		 [32,2,8,4],
-# 		 [8,32,4,2]]
+# board = [['.','.','.','.'],
+		 # ['.','.','.','.'],
+		 # ['.','.','.','.'],
+		 # ['.','.','.','.']]
+
+board = [['.',2,4,2],
+		 [16,4,64,4],
+		 [2,32,128,16],
+		 [16,64,2,32]]
 height = 4
 width = 4
 newTiles = []
@@ -309,7 +310,7 @@ def server():
 	            	else:
 		            	if state == "BOARD":
 		            		board = pickle.loads(data)
-		            		print "The other player has made a move"
+		            		print colored("The other player has made a move",'red')
 		            		printBoard()
 		            		print "received board"
 		            		WAIT = False
@@ -358,7 +359,7 @@ def run():
 		try:
 			while not isOver():
 				while(1):
-					print "make a move: "
+					print colored("Make a move: ",'red')
 					move = sys.stdin.read(1)
 					# print "SELECTED: %s"%move
 	                # if not move or move == chr(4):
@@ -380,12 +381,14 @@ def run():
 						isValidMove = makeMove(RIGHT)
 						break
 					else:
-						print "bad input"
-				if isValidMove:
+						print colored("Bad input",'red')
+				if not isValidMove:
+					print colored("You can't move in that direction!",'red')
+				elif containsBlanks():
 					generateNewTile()
-				else:
-					print "you can't move in that direction!"
 				# printBoard()
+				# sys.stdout.write("is over")
+				# print isOver()
 				if isOver():
 					# print "breaking"
 					break
@@ -393,10 +396,13 @@ def run():
 					# sendState("BOARD")
 				printBoard()
 					# WAIT = True
+			printBoard()
+			# sys.stdout.write("has won")
+			# print hasWon()
 			if hasWon():
-				print "You won!"
+				print colored("You won!",'red')
 			else:
-				print "You lost!"
+				print colored("You lost!",'red')
 		except KeyboardInterrupt:
 			# closeClient()
 			pass

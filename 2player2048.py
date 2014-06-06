@@ -18,6 +18,10 @@ PORT_NUMBER_1 = 10028
 PORT_NUMBER_2 = 10029
 connection = 0
 WAIT = None
+# board = [['.',2,4,2],
+# 		 [16,4,64,4],
+# 		 [2,32,128,16],
+# 		 [16,64,2,32]]
 board = [['.','.','.','.'],
 		 ['.','.','.','.'],
 		 ['.','.','.','.'],
@@ -222,11 +226,11 @@ def getAdjacentTiles(i,j):
 	return tiles
 
 def sendState(pkt_type):
-	print "SENDING NEW_TILES"
+	# print "SENDING NEW_TILES"
 	client_sock.sendall("NEW_TILES")
 	client_sock.sendall(pickle.dumps(newTiles))
 	time.sleep(1)
-	print "SENDING %s"%pkt_type
+	# print "SENDING %s"%pkt_type
 	client_sock.sendall(pkt_type)
 	client_sock.sendall(pickle.dumps(board))
 
@@ -237,9 +241,9 @@ def clientStart():
 
 	# Connect the socket to the port where the server is listening
 	if int(sys.argv[1]) == 1:
-		server_address = ('localhost', PORT_NUMBER_1)
+		server_address = (sys.argv[2], PORT_NUMBER_1)
 	else:
-		server_address = ('localhost', PORT_NUMBER_2)
+		server_address = (sys.argv[2], PORT_NUMBER_2)
 	print >>sys.stderr, 'connecting to %s port %s' % server_address
 	client_sock.connect(server_address)
 
@@ -299,24 +303,24 @@ def server():
 	            if data:
 	            	if data == "BOARD" or data == "INITIAL" or data == "NEW_TILES":
 	            		state = data
-	            		print "STATE: %s"%state
+	            		# print "STATE: %s"%state
 	            	else:
 		            	if state == "BOARD":
 		            		board = pickle.loads(data)
-		            		print "The other player has made a move"
+		            		print colored("The other player has made a move",'red')
 		            		printBoard()
-		            		print "received board"
+		            		# print "received board"
 		            		WAIT = False
 		            	elif state == "INITIAL":
 		            		board = pickle.loads(data)
-		            		print "received initial"
+		            		# print "received initial"
 		            		printBoard()
 		            	elif state == "NEW_TILES":
 		            		newTiles = pickle.loads(data)
-		            		print newTiles
-		            		print "received new tiles"
+		            		# print newTiles
+		            		# print "received new tiles"
 		            	state = "NORMAL"
-		            	print "STATE: NORMAL"
+		            	# print "STATE: NORMAL"
 	            else:
 	                break
 	    except KeyboardInterrupt:
@@ -331,8 +335,8 @@ def server():
 
 def run():
 	global WAIT
-	if len(sys.argv) != 2:
-		print "usage: python collaborative2048.py [1/2]"
+	if len(sys.argv) != 3:
+		print "usage: python collaborative2048.py [1/2] [IP_ADDRESS]"
 		exit(0)
 	thread.start_new_thread(server,())
 	time.sleep(5)
@@ -351,15 +355,12 @@ def run():
 		try:
 			while not isOver():
 				while(1):
-					print "move: "
 					move = sys.stdin.read(1)
-					print "SELECTED: %s"%move
-	                # if not move or move == chr(4):
-	                #     break
-					print "wait is %s"%WAIT
 					if WAIT == True:
-						print "Waiting for other player to make move..."
+						print colored("Waiting for other player to make move...",'red')
 						break
+					else:
+						print colored("Make a move: ",'red')
 					elif move == 'i' or move == 'I' or move == 'w' or move == 'W':
 						isValidMove = makeMove(UP)
 						break
@@ -373,21 +374,22 @@ def run():
 						isValidMove = makeMove(RIGHT)
 						break
 					else:
-						print "bad input"
+						print colored("Bad input",'red')
 				if isOver():
 					break
 				if WAIT == False:
-					if isValidMove:
+					if not isValidMove:
+						print colored("You can't move in that direction!",'red')
+					elif containsBlanks():
 						generateNewTile()
-					else:
-						print "you can't move in that direction!"
 					sendState("BOARD")
 					printBoard()
 					WAIT = True
+			printBoard()
 			if hasWon():
-				print "You both won!"
+				print colored("You both won!",'red')
 			else:
-				print "You both lost!"
+				print colored("You both lost!",'red')
 		except KeyboardInterrupt:
 			closeClient()
 		finally:
